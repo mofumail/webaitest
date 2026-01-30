@@ -2,41 +2,38 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Aesthetic Neural Field - High Energy</title>
+    <title>Neural Field - Sharp & Bold</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
     <style>
         :root {
-            --bg-color: #f7f3ed; /* Warm aesthetic beige */
-            --text-color: #5d5c58;
+            --bg-color: #f2ede4; /* Richer aesthetic beige */
+            --text-color: #4a4945;
         }
         body { 
             margin: 0; 
             overflow: hidden; 
             background: var(--bg-color); 
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-family: 'Courier New', Courier, monospace;
             color: var(--text-color); 
         }
         canvas { display: block; width: 100vw; height: 100vh; }
         #overlay {
-            position: absolute; top: 30px; left: 30px; pointer-events: none;
-            background: rgba(255, 255, 255, 0.4); 
-            padding: 20px; border-radius: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.5);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.03);
+            position: absolute; bottom: 40px; right: 40px; pointer-events: none;
+            background: rgba(255, 255, 255, 0.8); 
+            padding: 15px 25px; border-radius: 0px;
+            border: 2px solid var(--text-color);
+            box-shadow: 8px 8px 0px rgba(0,0,0,0.1);
             z-index: 10;
         }
-        h2 { margin: 0 0 5px 0; font-weight: 300; letter-spacing: 1px; font-size: 1.1rem; }
-        p { margin: 2px 0; font-size: 0.7rem; opacity: 0.6; text-transform: uppercase; font-weight: bold; }
+        h2 { margin: 0; font-weight: 900; text-transform: uppercase; font-size: 1rem; }
+        p { margin: 5px 0 0 0; font-size: 0.7rem; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="overlay">
-    <h2>Neural Evolution</h2>
-    <p>Epoch: <span id="epoch">0</span></p>
-    <p>Learning Loss: <span id="loss">0</span></p>
-    <p>Reset: <span id="timer">10</span>s</p>
+    <h2>Neural Logic v2</h2>
+    <p>LOSS: <span id="loss">0</span> / RESET: <span id="timer">10</span>s</p>
 </div>
 <canvas id="canvas"></canvas>
 
@@ -44,17 +41,16 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     
-    // Aesthetic Soothing Palette
+    // Palette: Sharp, high-contrast but soothing
     const COLORS = {
-        bg: '#f7f3ed',
-        blue: { r: 100, g: 149, b: 237 }, // Soothing Cornflower Blue
-        red: { r: 255, g: 111, b: 97 },   // Soothing Living Coral
-        pointStroke: 'rgba(255, 255, 255, 0.9)'
+        bg: '#f2ede4',
+        blue: { r: 65, g: 105, b: 225 }, // Royal Blue
+        red: { r: 220, g: 20, b: 60 }     // Crimson
     };
 
-    // 3x Larger Orb Settings
-    const orbSpacing = 110; // Large spacing
-    const orbRadiusBase = 45; // Waaay larger orbs
+    // Huge, Packed Orbs
+    const orbRadius = 85; 
+    const spacing = 130; // Closer spacing = less whitespace
     let width, height, rows, cols;
     
     let model, dataPoints = [], epochCount = 0;
@@ -66,21 +62,26 @@
         height = window.innerHeight;
         canvas.width = width;
         canvas.height = height;
-        cols = Math.ceil(width / orbSpacing) + 1;
-        rows = Math.ceil(height / orbSpacing) + 1;
+        cols = Math.ceil(width / spacing) + 1;
+        rows = Math.ceil(height / spacing) + 1;
     }
     window.addEventListener('resize', resize);
     resize();
 
     function generateData() {
         dataPoints = [];
-        // Generate a more complex "noisy" XOR pattern to keep the model guessing
-        for (let i = 0; i < 40; i++) {
+        // We generate data but don't draw it. 
+        // We use a "Radial XOR" to create complex circular shapes that warp
+        const centerDist = Math.random() * 0.5 + 0.2;
+        for (let i = 0; i < 80; i++) {
             let x = Math.random() * 2 - 1; 
             let y = Math.random() * 2 - 1;
-            let label = (x * y > 0) ? 0 : 1; 
-            // Add noise to make it "lossier"
-            if(Math.random() > 0.9) label = 1 - label;
+            let dist = Math.sqrt(x*x + y*y);
+            let label = dist > centerDist ? 0 : 1; 
+            
+            // Flip bits randomly for "lossy" chaos
+            if(Math.random() > 0.92) label = 1 - label;
+            
             dataPoints.push({ x, y, label });
         }
     }
@@ -89,39 +90,37 @@
         if (model) model.dispose();
         model = tf.sequential();
         
-        // Lossier setup: Small hidden layers + High learning rate = More visual instability
+        // tanh makes the boundaries much more organic and "swingy"
         model.add(tf.layers.dense({ 
             inputShape: [2], 
-            units: 6, 
-            activation: 'tanh', // tanh creates smoother gradients than relu
-            kernelInitializer: 'randomUniform' // Start chaotic
+            units: 12, 
+            activation: 'tanh',
+            kernelInitializer: 'randomNormal' 
         }));
         model.add(tf.layers.dense({ 
             units: 1, 
             activation: 'sigmoid' 
         }));
 
-        // CRITICAL: High learning rate (0.5) makes the colors fly around much faster
+        // MAX LEARNING RATE for maximum visual movement
         model.compile({ 
-            optimizer: tf.train.adam(0.5), 
+            optimizer: tf.train.adam(0.6), 
             loss: 'binaryCrossentropy' 
         });
         epochCount = 0;
     }
 
     function lerpColor(val) {
-        // val is 0 to 1 (model prediction)
         const r = Math.floor(COLORS.blue.r + (COLORS.red.r - COLORS.blue.r) * val);
         const g = Math.floor(COLORS.blue.g + (COLORS.red.g - COLORS.blue.g) * val);
         const b = Math.floor(COLORS.blue.b + (COLORS.red.b - COLORS.blue.b) * val);
-        return `rgba(${r}, ${g}, ${b}, 0.7)`; // Slight transparency for softness
+        return `rgb(${r}, ${g}, ${b})`;
     }
 
     async function draw() {
         ctx.fillStyle = COLORS.bg;
         ctx.fillRect(0, 0, width, height);
 
-        // 1. Prediction Pass
         const gridInputs = [];
         for (let i = 0; i < rows; i++) {
             for (let j = 0; j < cols; j++) {
@@ -135,41 +134,27 @@
             return model.predict(tf.tensor2d(gridInputs)).dataSync();
         });
 
-        // 2. Draw the Large Orbs
         let idx = 0;
         for (let i = 0; i < rows; i++) {
             for (let j = 0; j < cols; j++) {
                 const score = preds[idx++];
-                const posX = j * orbSpacing;
-                const posY = i * orbSpacing;
+                // Stagger every other row for a honeycomb-like pack (less whitespace)
+                const xOffset = (i % 2 === 0) ? 0 : spacing / 2;
+                const posX = j * spacing + xOffset;
+                const posY = i * spacing;
 
-                // Breathing animation
-                const pulse = Math.sin(Date.now() / 600 + (i + j)) * 5;
+                const pulse = Math.sin(Date.now() / 400 + (i + j)) * 8;
                 
-                // Outer Glow
-                const grad = ctx.createRadialGradient(posX, posY, 0, posX, posY, orbRadiusBase + pulse);
-                grad.addColorStop(0, lerpColor(score));
-                grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-
                 ctx.beginPath();
-                ctx.arc(posX, posY, orbRadiusBase + pulse, 0, Math.PI * 2);
-                ctx.fillStyle = grad;
+                ctx.arc(posX, posY, orbRadius + pulse, 0, Math.PI * 2);
+                ctx.fillStyle = lerpColor(score);
                 ctx.fill();
+                
+                // Add a very subtle sharp ring to keep it looking crisp
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
             }
-        }
-
-        // 3. Draw training dots (The target values)
-        for (let p of dataPoints) {
-            let px = (p.x + 1) / 2 * width;
-            let py = (p.y + 1) / 2 * height;
-            
-            ctx.beginPath();
-            ctx.arc(px, py, 6, 0, Math.PI * 2);
-            ctx.fillStyle = p.label === 0 ? `rgb(${COLORS.blue.r},${COLORS.blue.g},${COLORS.blue.b})` : `rgb(${COLORS.red.r},${COLORS.red.g},${COLORS.red.b})`;
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 3;
-            ctx.fill();
-            ctx.stroke();
         }
     }
 
@@ -183,13 +168,12 @@
             createModel();
         }
 
-        // Train 1 epoch at a time
         const xs = tf.tensor2d(dataPoints.map(p => [p.x, p.y]));
         const ys = tf.tensor2d(dataPoints.map(p => [p.label]));
+        
+        // High learning rate + low epochs = big visual shifts
         const history = await model.fit(xs, ys, { epochs: 1, silent: true });
         
-        epochCount++;
-        document.getElementById('epoch').innerText = epochCount;
         document.getElementById('loss').innerText = history.history.loss[0].toFixed(3);
 
         xs.dispose();
