@@ -2,38 +2,39 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Neural Field - Sharp & Bold</title>
+    <title>Neural Liquid - Smooth State</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
     <style>
         :root {
-            --bg-color: #f2ede4; /* Richer aesthetic beige */
-            --text-color: #4a4945;
+            --bg-color: #f5f0e1; 
+            --text-color: #3d3c3a;
         }
         body { 
             margin: 0; 
             overflow: hidden; 
             background: var(--bg-color); 
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
             color: var(--text-color); 
         }
         canvas { display: block; width: 100vw; height: 100vh; }
         #overlay {
-            position: absolute; bottom: 40px; right: 40px; pointer-events: none;
-            background: rgba(255, 255, 255, 0.8); 
-            padding: 15px 25px; border-radius: 0px;
-            border: 2px solid var(--text-color);
-            box-shadow: 8px 8px 0px rgba(0,0,0,0.1);
+            position: absolute; bottom: 30px; left: 30px; pointer-events: none;
+            background: rgba(255, 255, 255, 0.7); 
+            padding: 15px 20px; border-radius: 20px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
             z-index: 10;
         }
-        h2 { margin: 0; font-weight: 900; text-transform: uppercase; font-size: 1rem; }
-        p { margin: 5px 0 0 0; font-size: 0.7rem; font-weight: bold; }
+        h2 { margin: 0; font-weight: 600; font-size: 0.9rem; letter-spacing: 0.5px; opacity: 0.8;}
+        .stats { margin-top: 5px; font-size: 0.7rem; font-family: monospace; opacity: 0.5; }
     </style>
 </head>
 <body>
 
 <div id="overlay">
-    <h2>Neural Logic v2</h2>
-    <p>LOSS: <span id="loss">0</span> / RESET: <span id="timer">10</span>s</p>
+    <h2>Neural Classification</h2>
+    <div class="stats">LOSS: <span id="loss">0</span> // RESET: <span id="timer">10</span>s</div>
 </div>
 <canvas id="canvas"></canvas>
 
@@ -41,21 +42,22 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     
-    // Palette: Sharp, high-contrast but soothing
     const COLORS = {
-        bg: '#f2ede4',
-        blue: { r: 65, g: 105, b: 225 }, // Royal Blue
-        red: { r: 220, g: 20, b: 60 }     // Crimson
+        bg: '#f5f0e1',
+        blue: { r: 74, g: 144, b: 226 }, // Muted Sky
+        red: { r: 226, g: 106, b: 106 }   // Soft Terracotta
     };
 
-    // Huge, Packed Orbs
-    const orbRadius = 85; 
-    const spacing = 130; // Closer spacing = less whitespace
+    const orbRadius = 75; 
+    const spacing = 110; 
     let width, height, rows, cols;
     
     let model, dataPoints = [], epochCount = 0;
     let startTime = Date.now();
     const RESET_INTERVAL = 10000;
+
+    // Temporal Smoothing: Stores previous colors to prevent jitter
+    let smoothedPredictions = [];
 
     function resize() {
         width = window.innerWidth;
@@ -64,23 +66,29 @@
         canvas.height = height;
         cols = Math.ceil(width / spacing) + 1;
         rows = Math.ceil(height / spacing) + 1;
+        smoothedPredictions = new Array(rows * cols).fill(0.5);
     }
     window.addEventListener('resize', resize);
     resize();
 
     function generateData() {
         dataPoints = [];
-        // We generate data but don't draw it. 
-        // We use a "Radial XOR" to create complex circular shapes that warp
-        const centerDist = Math.random() * 0.5 + 0.2;
-        for (let i = 0; i < 80; i++) {
+        // Create 2-3 "Gravity Centers" (Class 1)
+        const centers = [
+            {x: Math.random()*1.4-0.7, y: Math.random()*1.4-0.7, r: Math.random()*0.3+0.2},
+            {x: Math.random()*1.4-0.7, y: Math.random()*1.4-0.7, r: Math.random()*0.3+0.2}
+        ];
+
+        for (let i = 0; i < 100; i++) {
             let x = Math.random() * 2 - 1; 
             let y = Math.random() * 2 - 1;
-            let dist = Math.sqrt(x*x + y*y);
-            let label = dist > centerDist ? 0 : 1; 
             
-            // Flip bits randomly for "lossy" chaos
-            if(Math.random() > 0.92) label = 1 - label;
+            // If point is inside any "gravity center" circle, it's Class 1
+            let label = 0;
+            for(let c of centers) {
+                let d = Math.sqrt((x-c.x)**2 + (y-c.y)**2);
+                if (d < c.r) label = 1;
+            }
             
             dataPoints.push({ x, y, label });
         }
@@ -90,27 +98,25 @@
         if (model) model.dispose();
         model = tf.sequential();
         
-        // tanh makes the boundaries much more organic and "swingy"
+        // Deep but narrow for "organic" smooth boundaries
         model.add(tf.layers.dense({ 
-            inputShape: [2], 
-            units: 12, 
-            activation: 'tanh',
-            kernelInitializer: 'randomNormal' 
+            inputShape: [2], units: 16, activation: 'tanh',
+            kernelInitializer: 'glorotNormal' 
         }));
-        model.add(tf.layers.dense({ 
-            units: 1, 
-            activation: 'sigmoid' 
-        }));
+        model.add(tf.layers.dense({ units: 8, activation: 'tanh' }));
+        model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
 
-        // MAX LEARNING RATE for maximum visual movement
+        // Lower learning rate (0.15) for smooth "gliding" transitions
         model.compile({ 
-            optimizer: tf.train.adam(0.6), 
+            optimizer: tf.train.adam(0.15), 
             loss: 'binaryCrossentropy' 
         });
         epochCount = 0;
     }
 
-    function lerpColor(val) {
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function getRGB(val) {
         const r = Math.floor(COLORS.blue.r + (COLORS.red.r - COLORS.blue.r) * val);
         const g = Math.floor(COLORS.blue.g + (COLORS.red.g - COLORS.blue.g) * val);
         const b = Math.floor(COLORS.blue.b + (COLORS.red.b - COLORS.blue.b) * val);
@@ -130,30 +136,30 @@
             }
         }
 
-        const preds = tf.tidy(() => {
+        const rawPreds = tf.tidy(() => {
             return model.predict(tf.tensor2d(gridInputs)).dataSync();
         });
 
         let idx = 0;
         for (let i = 0; i < rows; i++) {
             for (let j = 0; j < cols; j++) {
-                const score = preds[idx++];
-                // Stagger every other row for a honeycomb-like pack (less whitespace)
+                // SMOOTHING: Blend 20% of the new prediction with 80% of the old one
+                // This eliminates the high-frequency jitter
+                smoothedPredictions[idx] = lerp(smoothedPredictions[idx], rawPreds[idx], 0.2);
+                
+                const score = smoothedPredictions[idx];
+                idx++;
+
                 const xOffset = (i % 2 === 0) ? 0 : spacing / 2;
                 const posX = j * spacing + xOffset;
                 const posY = i * spacing;
 
-                const pulse = Math.sin(Date.now() / 400 + (i + j)) * 8;
+                const pulse = Math.sin(Date.now() / 800 + (i + j)*0.5) * 3;
                 
                 ctx.beginPath();
                 ctx.arc(posX, posY, orbRadius + pulse, 0, Math.PI * 2);
-                ctx.fillStyle = lerpColor(score);
+                ctx.fillStyle = getRGB(score);
                 ctx.fill();
-                
-                // Add a very subtle sharp ring to keep it looking crisp
-                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-                ctx.lineWidth = 2;
-                ctx.stroke();
             }
         }
     }
@@ -171,9 +177,7 @@
         const xs = tf.tensor2d(dataPoints.map(p => [p.x, p.y]));
         const ys = tf.tensor2d(dataPoints.map(p => [p.label]));
         
-        // High learning rate + low epochs = big visual shifts
         const history = await model.fit(xs, ys, { epochs: 1, silent: true });
-        
         document.getElementById('loss').innerText = history.history.loss[0].toFixed(3);
 
         xs.dispose();
