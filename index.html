@@ -2,189 +2,184 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Live Neural Net Visualization</title>
+    <title>Aesthetic Neural Field</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #111; font-family: monospace; color: white; }
+        :root {
+            --bg-color: #fdfbf7; /* Soothing off-white/beige */
+            --text-color: #5d5c58;
+        }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: var(--bg-color); 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-color); 
+        }
         canvas { display: block; width: 100vw; height: 100vh; }
         #overlay {
-            position: absolute; top: 20px; left: 20px; pointer-events: none;
-            background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px;
+            position: absolute; top: 30px; left: 30px; pointer-events: none;
+            background: rgba(255, 255, 255, 0.6); 
+            padding: 20px; border-radius: 15px;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.05);
         }
+        h2 { margin: 0 0 10px 0; font-weight: 300; letter-spacing: 1px; font-size: 1.2rem; }
+        p { margin: 5px 0; font-size: 0.8rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; }
     </style>
 </head>
 <body>
 
 <div id="overlay">
-    <h2>Neural Net Live Training</h2>
+    <h2>Neural Field</h2>
     <p>Epoch: <span id="epoch">0</span></p>
     <p>Loss: <span id="loss">0</span></p>
-    <p>Resetting in: <span id="timer">10</span>s</p>
+    <p>Reset: <span id="timer">10</span>s</p>
 </div>
 <canvas id="canvas"></canvas>
 
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    
+    // Aesthetic Colors (Soothing Tones)
+    const COLORS = {
+        bg: '#fdfbf7',
+        blue: { r: 127, g: 179, b: 213 }, // Muted Sky Blue
+        red: { r: 233, g: 150, b: 122 },  // Dark Salmon / Soothing Red
+        pointStroke: 'rgba(255, 255, 255, 0.8)'
+    };
 
-    // Low res heatmap for performance, scaled up by CSS
-    const heatMapRes = 50;
-    let width, height;
-
-    // TensorFlow variables
-    let model;
-    let dataPoints = [];
-    let isTraining = false;
-    let epochCount = 0;
-
-    // Timer variables
+    // Grid Settings
+    const orbSpacing = 35; 
+    let width, height, rows, cols;
+    
+    let model, dataPoints = [], epochCount = 0;
     let startTime = Date.now();
-    const RESET_INTERVAL = 10000; // 10 seconds
+    const RESET_INTERVAL = 10000;
 
-    // 1. Setup Canvas
     function resize() {
         width = window.innerWidth;
         height = window.innerHeight;
         canvas.width = width;
         canvas.height = height;
+        cols = Math.ceil(width / orbSpacing);
+        rows = Math.ceil(height / orbSpacing);
     }
     window.addEventListener('resize', resize);
     resize();
 
-    // 2. Generate Data (XOR Pattern - 4 clusters)
     function generateData() {
         dataPoints = [];
-        const numPoints = 100;
-
-        for (let i = 0; i < numPoints; i++) {
-            // Random coordinate between -1 and 1
-            let x = Math.random() * 2 - 1;
+        for (let i = 0; i < 60; i++) {
+            let x = Math.random() * 2 - 1; 
             let y = Math.random() * 2 - 1;
-
-            // Logic: If signs match (++, --) it's class 0. If signs differ (+-, -+) it's class 1
-            // We add noise so it's not perfect
-            let label = (x * y > 0) ? 0 : 1;
-
+            // XOR logic: clusters in opposite corners
+            let label = (x * y > 0) ? 0 : 1; 
             dataPoints.push({ x, y, label });
         }
     }
 
-    // 3. Create Model
     function createModel() {
-        if (model) model.dispose(); // Cleanup old model from memory
-
+        if (model) model.dispose();
         model = tf.sequential();
-
-        // Hidden Layer 1: 8 neurons, ReLU activation (learns non-linear shapes)
         model.add(tf.layers.dense({ inputShape: [2], units: 8, activation: 'relu' }));
-        // Hidden Layer 2: 4 neurons
         model.add(tf.layers.dense({ units: 4, activation: 'relu' }));
-        // Output Layer: 1 neuron, Sigmoid (outputs probability 0 to 1)
         model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
-
-        model.compile({
-            optimizer: tf.train.adam(0.1), // Learning rate
-            loss: 'binaryCrossentropy'
-        });
-
+        model.compile({ optimizer: tf.train.adam(0.1), loss: 'binaryCrossentropy' });
         epochCount = 0;
     }
 
-    // 4. Drawing Logic
-    function draw() {
-        // A. Draw Background Heatmap (The "Brain")
-        // We create a grid of inputs covering the screen
-        const inputs = [];
-        for (let i = 0; i < heatMapRes; i++) {
-            for (let j = 0; j < heatMapRes; j++) {
-                let x = (i / heatMapRes) * 2 - 1;
-                let y = (j / heatMapRes) * 2 - 1;
-                inputs.push([x, y]);
+    // Helper to interpolate between our two soothing colors
+    function lerpColor(val) {
+        const r = Math.floor(COLORS.blue.r + (COLORS.red.r - COLORS.blue.r) * val);
+        const g = Math.floor(COLORS.blue.g + (COLORS.red.g - COLORS.blue.g) * val);
+        const b = Math.floor(COLORS.blue.b + (COLORS.red.b - COLORS.blue.b) * val);
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    async function draw() {
+        ctx.fillStyle = COLORS.bg;
+        ctx.fillRect(0, 0, width, height);
+
+        // 1. Prepare grid inputs for the model
+        const gridInputs = [];
+        for (let i = 0; i < rows; i++) {
+            for (let j = 0; j < cols; j++) {
+                let x = (j / cols) * 2 - 1;
+                let y = (i / rows) * 2 - 1;
+                gridInputs.push([x, y]);
             }
         }
 
-        // Ask model to predict all grid points at once (tidy cleans up GPU memory)
-        tf.tidy(() => {
-            const inputTensor = tf.tensor2d(inputs);
-            const predictions = model.predict(inputTensor).dataSync();
-
-            // Draw the heatmap rectangles
-            const w = width / heatMapRes;
-            const h = height / heatMapRes;
-
-            for (let i = 0; i < heatMapRes; i++) {
-                for (let j = 0; j < heatMapRes; j++) {
-                    const idx = i * heatMapRes + j;
-                    const score = predictions[idx];
-
-                    // Color interpolation: Blue (0) to Red (1)
-                    ctx.fillStyle = `rgba(${score * 255}, 0, ${(1 - score) * 255}, 0.5)`;
-                    ctx.fillRect(j * w, i * h, w + 1, h + 1); // +1 to fix tiny gaps
-                }
-            }
+        // 2. Get predictions
+        const preds = tf.tidy(() => {
+            return model.predict(tf.tensor2d(gridInputs)).dataSync();
         });
 
-        // B. Draw Data Points
+        // 3. Draw Orbs
+        let idx = 0;
+        for (let i = 0; i < rows; i++) {
+            for (let j = 0; j < cols; j++) {
+                const score = preds[idx++];
+                const posX = j * orbSpacing + orbSpacing/2;
+                const posY = i * orbSpacing + orbSpacing/2;
+
+                // Subtle pulse based on time
+                const pulse = Math.sin(Date.now() / 1000 + (i+j)*0.2) * 2;
+                
+                ctx.beginPath();
+                ctx.arc(posX, posY, 4 + pulse, 0, Math.PI * 2);
+                ctx.fillStyle = lerpColor(score);
+                ctx.fill();
+            }
+        }
+
+        // 4. Draw Original Data Points (Small rings)
         for (let p of dataPoints) {
-            // Map -1..1 to screen coordinates
             let px = (p.x + 1) / 2 * width;
             let py = (p.y + 1) / 2 * height;
-
+            
             ctx.beginPath();
-            ctx.arc(px, py, 6, 0, Math.PI * 2);
-            ctx.fillStyle = p.label === 0 ? '#00ccff' : '#ff0066'; // Cyan vs Pink
-            ctx.strokeStyle = 'white';
+            ctx.arc(px, py, 5, 0, Math.PI * 2);
+            ctx.fillStyle = p.label === 0 ? lerpColor(0) : lerpColor(1);
+            ctx.strokeStyle = COLORS.pointStroke;
             ctx.lineWidth = 2;
             ctx.fill();
             ctx.stroke();
         }
     }
 
-    // 5. Main Loop
-    async function trainAndRender() {
-        const timeElapsed = Date.now() - startTime;
-        const timeLeft = Math.max(0, Math.ceil((RESET_INTERVAL - timeElapsed) / 1000));
-        document.getElementById('timer').innerText = timeLeft;
+    async function loop() {
+        const elapsed = Date.now() - startTime;
+        document.getElementById('timer').innerText = Math.max(0, Math.ceil((RESET_INTERVAL - elapsed) / 1000));
 
-        // Reset check
-        if (timeElapsed > RESET_INTERVAL) {
+        if (elapsed > RESET_INTERVAL) {
             startTime = Date.now();
             generateData();
             createModel();
         }
 
-        // Convert data to tensors for training
         const xs = tf.tensor2d(dataPoints.map(p => [p.x, p.y]));
         const ys = tf.tensor2d(dataPoints.map(p => [p.label]));
 
-        // Train for one epoch (fit is async)
-        const history = await model.fit(xs, ys, {
-            epochs: 1,
-            batchSize: 32,
-            shuffle: true
-        });
-
-        // Update UI
+        const history = await model.fit(xs, ys, { epochs: 1, silent: true });
+        
         epochCount++;
         document.getElementById('epoch').innerText = epochCount;
-        document.getElementById('loss').innerText = history.history.loss[0].toFixed(4);
+        document.getElementById('loss').innerText = history.history.loss[0].toFixed(3);
 
-        // Cleanup tensors to prevent memory leak
         xs.dispose();
         ys.dispose();
 
-        // Draw the frame
-        draw();
-
-        // Keep loop going
-        requestAnimationFrame(trainAndRender);
+        await draw();
+        requestAnimationFrame(loop);
     }
 
-    // Start everything
     generateData();
     createModel();
-    trainAndRender();
-
+    loop();
 </script>
 </body>
 </html>
